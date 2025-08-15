@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connect Four AI Duel | ターン制・頭脳バトル</title>
+<style>
+  :root{ --bg:#0b1020; --panel:#121a33; --muted:#9aa4c7; --text:#eef2ff; --p1:#ffd166; --p2:#5aa9ff; --empty:#0e1534; --accent:#72f1b8; }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:radial-gradient(1200px 700px at 80% -10%, #142048 0%, var(--bg) 35%), radial-gradient(800px 600px at -10% 110%, #1a2a56 0%, var(--bg) 45%); color:var(--text); font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,"Noto Sans JP",sans-serif; display:flex; align-items:center; justify-content:center; padding:22px; }
+  .card{ width:min(1100px,100%); background: color-mix(in srgb, var(--panel) 90%, #000 10%); border:1px solid rgba(255,255,255,.08); border-radius:20px; box-shadow:0 12px 40px rgba(0,0,0,.35); overflow:hidden; }
+  header{ padding:16px 20px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)); border-bottom:1px solid rgba(255,255,255,.06); }
+  header h1{ margin:0; font-size:clamp(18px,4vw,22px); }
+  header .small{ color:var(--muted); font-size:12px; }
+  main{ padding:16px 20px 24px; display:grid; gap:14px; }
+
+  .row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .section{ background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:14px; }
+  .input, select{ background:#0d1430; border:1px solid rgba(255,255,255,.12); color:var(--text); border-radius:12px; padding:10px 12px; outline:none; }
+  .btn{ border:none; border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:800; letter-spacing:.02em; }
+  .btn-ghost{ background:transparent; color:var(--muted); border:1px dashed rgba(255,255,255,.18); }
+  .btn-blue{ background:linear-gradient(180deg,#9dccff,#5aa9ff); color:#081028; }
+  .btn-green{ background:linear-gradient(180deg,#9ff0d3,#72f1b8); color:#05281a; }
+  .btn-amber{ background:linear-gradient(180deg,#ffe39b,#ffd166); color:#3d2a00; }
+  .pill{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.2); }
+  .ok{ background: rgba(114,241,184,.15); border-color: rgba(114,241,184,.5); }
+  .warn{ background: rgba(255,209,102,.12); border-color: rgba(255,255,255,.5); }
+  .danger{ background: rgba(255,122,195,.12); border-color: rgba(255,255,255,.5); }
+
+  .board-wrap{ display:grid; grid-template-columns: 1fr auto; gap:16px; }
+  .board{ position:relative; width:min(640px, 90vw); aspect-ratio:7/6; background: linear-gradient(180deg, #274096, #16245c); border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:10px; box-shadow: inset 0 0 30px rgba(0,0,0,.4); }
+  .grid{ display:grid; grid-template-columns: repeat(7,1fr); grid-template-rows: repeat(6,1fr); gap:10px; height:100%; }
+  .cell{ position:relative; border-radius:12px; background: #0e1636; display:grid; place-items:center; }
+  .disc{ width: calc(100% - 8px); height: calc(100% - 8px); border-radius:50%; background:var(--empty); border: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 4px 10px rgba(0,0,0,.6); }
+  .disc.p1{ background: radial-gradient(120% 120% at 30% 20%, #fff1c1 0%, #ffd166 35%, #c08b00 85%); }
+  .disc.p2{ background: radial-gradient(120% 120% at 30% 20%, #d7eaff 0%, #5aa9ff 35%, #1b5db0 85%); }
+  .col-hover{ position:absolute; top:10px; bottom:10px; left:10px; right:10px; display:grid; grid-template-columns: repeat(7,1fr); grid-template-rows: 1fr; }
+  .col-hover > div{ cursor:pointer; }
+  .col-hover > div:hover{ background: rgba(255,255,255,.05); }
+
+  .anim-layer{ position:absolute; inset:0; pointer-events:none; }
+  .dyn{ position:absolute; will-change: transform; filter: drop-shadow(0 10px 14px rgba(0,0,0,.45)); }
+
+  .side{ display:grid; gap:12px; align-content:start; }
+  .bar{ height: 10px; background:#0f1736; border:1px solid rgba(255,255,255,.08); border-radius:999px; overflow:hidden; }
+  .bar > div{ height:100%; width:50%; transition: width .2s ease; background: linear-gradient(90deg, var(--p2), var(--p1)); }
+  code{ background:#0f1736; padding:2px 6px; border-radius:6px; }
+  .disc.win{ outline:3px solid var(--accent); outline-offset:-2px; box-shadow:0 0 14px rgba(114,241,184,.55), inset 0 0 8px rgba(114,241,184,.35); animation: winPulse 900ms ease-in-out infinite alternate; }
+  @keyframes winPulse{ from{ filter:brightness(1); } to{ filter:brightness(1.25); } }
+  .win-rect{ position:absolute; border:3px solid var(--accent); border-radius:16px; box-shadow:0 0 18px rgba(114,241,184,.35); pointer-events:none; opacity:.95; }
+  .diag{ margin-top:8px; font-size:11px; color:#8aa3ff; opacity:.9; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <h1>🧩 Connect Four AI Duel <span class="small">— ターン制 × αβ探索 × 反復深化</span></h1>
+      <div class="small">保存→ダブルクリックで起動（完全ローカル）</div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+          <div class="row" style="gap:12px; align-items:flex-end;">
+            <div>
+              <label class="small">対戦</label>
+              <select id="modeSel" class="input">
+                <option value="ai" selected>あなた vs AI</option>
+                <option value="pvp">ローカル2人対戦</option>
+              </select>
+            </div>
+            <div>
+              <label class="small">先手</label>
+              <select id="firstSel" class="input">
+                <option value="human" selected>あなた</option>
+                <option value="ai">AI</option>
+              </select>
+            </div>
+            <div>
+              <label class="small">AI 思考時間</label>
+              <div class="row">
+                <input id="timeRange" type="range" min="300" max="4000" step="100" value="1600" />
+                <span class="small" id="timeLabel">1.6s</span>
+              </div>
+            </div>
+            <div>
+              <label class="small">最大深さ</label>
+              <select id="depthSel" class="input">
+                <option>4</option><option selected>6</option><option>8</option><option>10</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="gap:8px;">
+            <button id="newBtn" class="btn btn-green">新局面</button>
+            <button id="undoBtn" class="btn btn-ghost">一手戻す</button>
+            <button id="hintBtn" class="btn btn-amber">ヒント</button>
+            <button id="solveBtn" class="btn btn-blue">AIに任せる</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section board-wrap">
+        <div class="board" id="board">
+          <div class="grid" id="grid"></div>
+          <div class="col-hover" id="hoverCols"></div>
+          <div class="anim-layer" id="animLayer"></div>
+        </div>
+        <div class="side">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <span id="statePill" class="pill warn">進行中</span>
+            <span class="small" id="statusSmall">—</span>
+          </div>
+          <div>
+            <div class="small">評価（AI視点）</div>
+            <div class="bar"><div id="evalBar" style="width:50%"></div></div>
+            <div class="small">PV: <code id="pv">—</code></div>
+          </div>
+          <div>
+            <div class="small">着手履歴</div>
+            <div id="moves" class="small" style="line-height:1.6">—</div>
+          </div>
+          <div id="testStatus" class="diag">Self-tests: running…</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+// ===== Constants =====
+const COLS=7, ROWS=6; // 7x6 standard
+const EMPTY=0, P1=1, P2=2; // P1=you(default), P2=ai
+const COL_ORDER=[3,4,2,5,1,6,0]; // move ordering: center first
+
+// ===== State =====
+const S={ board: Array.from({length:ROWS},()=>Array(COLS).fill(EMPTY)), turn:P1, over:false, mode:'ai', first:'human', stack:[], timeLimit:1600, maxDepth:6, animating:false };
+
+// ===== UI Refs =====
+const boardEl = document.getElementById('board');
+const gridEl = document.getElementById('grid');
+const hoverCols = document.getElementById('hoverCols');
+const animLayer = document.getElementById('animLayer');
+const statePill = document.getElementById('statePill');
+const statusSmall = document.getElementById('statusSmall');
+const evalBar = document.getElementById('evalBar');
+const pvEl = document.getElementById('pv');
+const movesEl = document.getElementById('moves');
+const newBtn = document.getElementById('newBtn');
+const undoBtn = document.getElementById('undoBtn');
+const hintBtn = document.getElementById('hintBtn');
+const solveBtn = document.getElementById('solveBtn');
+const timeRange = document.getElementById('timeRange');
+const timeLabel = document.getElementById('timeLabel');
+const modeSel = document.getElementById('modeSel');
+const firstSel = document.getElementById('firstSel');
+const depthSel = document.getElementById('depthSel');
+
+// ===== UI Setup =====
+function buildBoard(){
+  gridEl.innerHTML='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell=document.createElement('div'); cell.className='cell';
+      const disc=document.createElement('div'); disc.className='disc'; disc.dataset.r=r; disc.dataset.c=c;
+      cell.appendChild(disc); gridEl.appendChild(cell);
+    }
+  }
+  hoverCols.innerHTML='';
+  for(let c=0;c<COLS;c++){
+    const d=document.createElement('div'); d.dataset.c=c; hoverCols.appendChild(d);
+  }
+}
+
+function render(){
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const i=r*COLS+c; const disc=gridEl.children[i].firstChild; const v=S.board[r][c];
+      disc.className='disc'+(v===P1?' p1':v===P2?' p2':'');
+    }
+  }
+  movesEl.textContent = S.stack.map((m,i)=> (i%2? '… ' : '') + (m+1)).join(' ');
+}
+
+function reset(){
+  S.board.forEach(row=>row.fill(EMPTY)); S.turn=(S.first==='human'?P1:P2); S.over=false; S.stack.length=0; pvEl.textContent='—'; setEvalBar(0); S.animating=false; animLayer.innerHTML='';
+  // clear win highlights if any
+  gridEl.querySelectorAll('.disc.win').forEach(el=>el.classList.remove('win'));
+  const wr = animLayer.querySelector('.win-rect'); if(wr) wr.remove();
+  render();
+  setStatePill('進行中','warn');
+  statusSmall.textContent = (S.mode==='ai'? (S.first==='ai'? 'AIの先手' : 'あなたの先手') : 'ローカル2人用');
+  if(S.mode==='ai' && S.turn===P2){ setTimeout(aiMove, 200); }
+}
+
+function setStatePill(text, cls){ statePill.textContent=text; statePill.className='pill '+cls; }
+function setEvalBar(score){ const x = Math.max(0, Math.min(100, 50 + score/4)); evalBar.style.width = x+'%'; }
+
+// ===== Game Logic =====
+function legalMoves(board=S.board){ const arr=[]; for(let c=0;c<COLS;c++) if(board[0][c]===EMPTY) arr.push(c); return arr; }
+function findRow(board, c){ for(let r=ROWS-1;r>=0;r--){ if(board[r][c]===EMPTY) return r; } return -1; }
+function drop(board, c, who){ const r=findRow(board,c); if(r>=0) board[r][c]=who; return r; }
+function undo(board, c){ for(let r=0;r<ROWS;r++){ if(board[r][c]!==EMPTY){ board[r][c]=EMPTY; return r; } } return -1; }
+
+function checkWin(board, who){
+  return !!getWinLine(board, who);
+}
+
+function getWinLine(board, who){
+  // horiz
+  for(let r=0;r<ROWS;r++) for(let c=0;c<=COLS-4;c++) if(board[r][c]===who&&board[r][c+1]===who&&board[r][c+2]===who&&board[r][c+3]===who) return [[r,c],[r,c+1],[r,c+2],[r,c+3]];
+  // vert
+  for(let c=0;c<COLS;c++) for(let r=0;r<=ROWS-4;r++) if(board[r][c]===who&&board[r+1][c]===who&&board[r+2][c]===who&&board[r+3][c]===who) return [[r,c],[r+1,c],[r+2,c],[r+3,c]];
+  // diag down-right
+  for(let r=0;r<=ROWS-4;r++) for(let c=0;c<=COLS-4;c++) if(board[r][c]===who&&board[r+1][c+1]===who&&board[r+2][c+2]===who&&board[r+3][c+3]===who) return [[r,c],[r+1,c+1],[r+2,c+2],[r+3,c+3]];
+  // diag up-right
+  for(let r=3;r<ROWS;r++) for(let c=0;c<=COLS-4;c++) if(board[r][c]===who&&board[r-1][c+1]===who&&board[r-2][c+2]===who&&board[r-3][c+3]===who) return [[r,c],[r-1,c+1],[r-2,c+2],[r-3,c+3]];
+  return null;
+}
+
+function highlightWin(coords){
+  // add class to discs
+  for(const [r,c] of coords){ const i=r*COLS+c; const disc=gridEl.children[i].firstChild; disc.classList.add('win'); }
+  // draw surrounding rectangle
+  const boardRect = boardEl.getBoundingClientRect();
+  const rects = coords.map(([r,c])=>{ const t=gridEl.children[r*COLS+c].firstChild.getBoundingClientRect(); return {x:t.left-boardRect.left, y:t.top-boardRect.top, w:t.width, h:t.height}; });
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const r of rects){ minX=Math.min(minX,r.x); minY=Math.min(minY,r.y); maxX=Math.max(maxX, r.x+r.w); maxY=Math.max(maxY, r.y+r.h); }
+  const pad = 6;
+  const box = document.createElement('div'); box.className='win-rect';
+  box.style.left = (minX-pad)+'px'; box.style.top=(minY-pad)+'px'; box.style.width=(maxX-minX+pad*2)+'px'; box.style.height=(maxY-minY+pad*2)+'px';
+  const old=animLayer.querySelector('.win-rect'); if(old) old.remove();
+  animLayer.appendChild(box);
+}
+
+function isFull(board){ return legalMoves(board).length===0; }
+
+function cellRect(row,col){ const i=row*COLS+col; const target=gridEl.children[i].firstChild; const boardRect=boardEl.getBoundingClientRect(); const tRect=target.getBoundingClientRect(); return {x:tRect.left-boardRect.left, y:tRect.top-boardRect.top, w:tRect.width, h:tRect.height}; }
+
+// ===== Physics-based drop (gravity + small bounce) =====
+function physicsDrop(col, row, who){
+  return new Promise(resolve=>{
+    const pos = cellRect(0, col); // top cell geometry for width/left
+    const target = cellRect(row, col);
+    const ghost = document.createElement('div');
+    ghost.className = 'disc dyn '+(who===P1?'p1':'p2');
+    ghost.style.width = target.w+'px';
+    ghost.style.height = target.h+'px';
+    let x = target.x, y = pos.y - target.h*1.2; // start slightly above top row
+    let v = 0; // px/s
+    const g = 4800; // gravity px/s^2
+    const dtMax = 32; // ms cap per frame
+    const bounce = 0.28; // restitution
+    const floor = target.y;
+    let bounces = 0;
+    let last = performance.now();
+    ghost.style.transform = `translate(${x}px, ${y}px)`;
+    animLayer.appendChild(ghost);
+
+    function step(now){
+      const dt = Math.min(dtMax, now - last) / 1000; // seconds
+      last = now;
+      v += g * dt;
+      y += v * dt;
+      if(y >= floor){
+        y = floor;
+        v = -v * bounce;
+        bounces++;
+        if(Math.abs(v) < 120 || bounces>2){ // settle
+          ghost.style.transform = `translate(${x}px, ${floor}px)`;
+          ghost.remove();
+          return resolve();
+        }
+      }
+      ghost.style.transform = `translate(${x}px, ${y}px)`;
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+async function applyMove(c){
+  if(S.over||S.animating) return; if(S.mode==='ai' && S.turn===P2) return; if(S.board[0][c]!==EMPTY) return;
+  S.animating=true;
+  const row=findRow(S.board,c);
+  await physicsDrop(c,row,S.turn);
+  drop(S.board,c,S.turn); S.stack.push(c); render();
+  const w1=getWinLine(S.board,S.turn); if(w1){ highlightWin(w1); gameOver(S.turn); S.animating=false; return; }
+  if(isFull(S.board)){ gameOver(0); S.animating=false; return; }
+  S.turn = (S.turn===P1?P2:P1); S.animating=false;
+  if(S.mode==='ai' && S.turn===P2){ setTimeout(aiMove, 120); }
+}
+
+function gameOver(winner){ S.over=true; if(winner===P1) setStatePill('あなたの勝ち','ok'); else if(winner===P2) setStatePill('AIの勝ち','danger'); else setStatePill('引き分け','ok'); }
+
+// ===== Evaluation =====
+const WINDOWS = (()=>{ const arr=[]; for(let r=0;r<ROWS;r++) for(let c=0;c<=COLS-4;c++) arr.push([[r,c],[r,c+1],[r,c+2],[r,c+3]]); for(let c=0;c<COLS;c++) for(let r=0;r<=ROWS-4;r++) arr.push([[r,c],[r+1,c],[r+2,c],[r+3,c]]); for(let r=0;r<=ROWS-4;r++) for(let c=0;c<=COLS-4;c++) arr.push([[r,c],[r+1,c+1],[r+2,c+2],[r+3,c+3]]); for(let r=3;r<ROWS;r++) for(let c=0;c<=COLS-4;c++) arr.push([[r,c],[r-1,c+1],[r-2,c+2],[r-3,c+3]]); return arr; })();
+function evalWindow(board, coords){ let a=0,h=0,e=0; for(const [r,c] of coords){ const v=board[r][c]; if(v===P2) a++; else if(v===P1) h++; else e++; } let s=0; if(a===4) s+=100000; else if(a===3 && e===1) s+=240; else if(a===2 && e===2) s+=50; if(h===3 && e===1) s-=220; if(h===4) s-=100000; return s; }
+function centerBonus(board){ let a=0,h=0; const c=3; for(let r=0;r<ROWS;r++){ a+=(board[r][c]===P2); h+=(board[r][c]===P1); } return (a-h)*12; }
+function evaluate(board){ let s=centerBonus(board); for(const w of WINDOWS) s+=evalWindow(board,w); return s; }
+
+// ===== Minimax with alpha-beta + iterative deepening =====
+function minimax(board, depth, alpha, beta, maximizing, startTime, timeLimit){
+  const now=performance.now(); if(now-startTime>timeLimit) return {score:evaluate(board), move:null, cutoff:true, pv:[]};
+  if(checkWin(board,P2)) return {score:  100000 - depth, move:null, cutoff:false, pv:[]};
+  if(checkWin(board,P1)) return {score: -100000 + depth, move:null, cutoff:false, pv:[]};
+  if(depth===0 || isFull(board)) return {score:evaluate(board), move:null, cutoff:false, pv:[]};
+  const legal = legalMoves(board); if(legal.length===0) return {score:0, move:null, cutoff:false, pv:[]};
+  legal.sort((a,b)=> COL_ORDER.indexOf(a)-COL_ORDER.indexOf(b));
+  let bestMove=null; let bestPV=[];
+  if(maximizing){
+    let value=-Infinity;
+    for(const m of legal){ const r=findRow(board,m); board[r][m]=P2; const res=minimax(board, depth-1, alpha, beta, false, startTime, timeLimit); board[r][m]=EMPTY; if(res.cutoff) return {score:value, move:bestMove, cutoff:true, pv:bestPV}; if(res.score>value){ value=res.score; bestMove=m; bestPV=[m,...res.pv]; } alpha=Math.max(alpha,value); if(alpha>=beta) break; }
+    return {score:value, move:bestMove, cutoff:false, pv:bestPV};
+  } else {
+    let value=Infinity;
+    for(const m of legal){ const r=findRow(board,m); board[r][m]=P1; const res=minimax(board, depth-1, alpha, beta, true, startTime, timeLimit); board[r][m]=EMPTY; if(res.cutoff) return {score:value, move:bestMove, cutoff:true, pv:bestPV}; if(res.score<value){ value=res.score; bestMove=m; bestPV=[m,...res.pv]; } beta=Math.min(beta,value); if(alpha>=beta) break; }
+    return {score:value, move:bestMove, cutoff:false, pv:bestPV};
+  }
+}
+
+function searchMove(timeLimit, maxDepth){
+  const start=performance.now(); let best={score:-Infinity, move:null, pv:[]};
+  for(let d=1; d<=maxDepth; d++){
+    const res=minimax(S.board.map(r=>r.slice()), d, -Infinity, Infinity, true, start, timeLimit);
+    if(res.cutoff){ break; }
+    if(res.move!==null){ best=res; pvEl.textContent = res.pv.map(x=>x+1).join(' → '); setEvalBar(Math.max(-200,Math.min(200,res.score/10))); }
+    if(performance.now()-start>timeLimit) break;
+  }
+  return best.move!==null? best : null;
+}
+
+async function aiMove(){
+  if(S.over||S.animating) return; statusSmall.textContent='AI思考中…';
+  const ans=searchMove(S.timeLimit, S.maxDepth);
+  const m = ans? ans.move : legalMoves().sort((a,b)=>Math.abs(a-3)-Math.abs(b-3))[0];
+  S.animating=true; const row=findRow(S.board,m); await physicsDrop(m,row,P2); drop(S.board,m,P2); S.stack.push(m); render();
+  const w2=getWinLine(S.board,P2); if(w2){ highlightWin(w2); gameOver(P2); S.animating=false; return; }
+  if(isFull(S.board)){ gameOver(0); S.animating=false; return; }
+  S.turn=P1; statusSmall.textContent='あなたの番'; S.animating=false;
+}
+
+// ===== Hints & helpers =====
+function computeHint(){ const clone=S.board.map(r=>r.slice()); for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){ if(clone[r][c]===P1) clone[r][c]=P2; else if(clone[r][c]===P2) clone[r][c]=P1; } const start=performance.now(); const res=minimax(clone, Math.min(S.maxDepth, 6), -Infinity, Infinity, true, start, Math.min(S.timeLimit, 1500)); return res && res.move!=null ? res.move : null; }
+
+// ===== Events =====
+hoverCols.addEventListener('click', (e)=>{ const t=e.target; if(!(t&&t.dataset&&t.dataset.c)) return; applyMove(Number(t.dataset.c)); });
+
+newBtn.addEventListener('click', reset);
+undoBtn.addEventListener('click', async ()=>{
+  if(S.stack.length===0||S.over||S.animating) return;
+  const last=S.stack.pop(); undo(S.board,last);
+  S.turn=(S.turn===P1?P2:P1);
+  if(S.mode==='ai' && S.turn===P2 && S.stack.length>0){
+    const last2=S.stack.pop(); undo(S.board,last2); S.turn=P1;
+  }
+  setStatePill('進行中','warn'); S.over=false;
+  // clear highlights
+  gridEl.querySelectorAll('.disc.win').forEach(el=>el.classList.remove('win'));
+  const wr=animLayer.querySelector('.win-rect'); if(wr) wr.remove();
+  render();
+});
+
+hintBtn.addEventListener('click', ()=>{ if(S.over||S.animating) return; if(S.mode==='ai' && S.turn===P2) return; const h=computeHint(); if(h==null){ statusSmall.textContent='ヒントなし'; return; } statusSmall.textContent=`ヒント: 列 ${h+1}`; });
+
+solveBtn.addEventListener('click', async ()=>{ if(S.over||S.animating) return; if(S.mode==='ai'){ if(S.turn===P1){ const h=computeHint(); const m=(h!=null? h : legalMoves().sort((a,b)=>Math.abs(a-3)-Math.abs(b-3))[0]); await applyMove(m); } if(!S.over) await aiMove(); } else { const m=legalMoves().sort((a,b)=>Math.abs(a-3)-Math.abs(b-3))[0]; await applyMove(m); } });
+
+timeRange.addEventListener('input', ()=>{ S.timeLimit=parseInt(timeRange.value,10); timeLabel.textContent=(S.timeLimit/1000).toFixed(1)+'s'; });
+modeSel.addEventListener('change', ()=>{ S.mode=modeSel.value; reset(); });
+firstSel.addEventListener('change', ()=>{ S.first=firstSel.value; reset(); });
+depthSel.addEventListener('change', ()=>{ S.maxDepth=parseInt(depthSel.value,10); });
+
+// ===== Self tests (non-intrusive) =====
+function runSelfTests(){
+  const out=document.getElementById('testStatus');
+  const fails=[]; const logs=[];
+  const assert=(name, cond)=>{ if(!cond){ fails.push(name); console.error('[TEST FAIL]', name); } else { logs.push(name); } };
+  const empty=()=>Array.from({length:ROWS},()=>Array(COLS).fill(EMPTY));
+
+  // T1 legal moves on empty
+  const b1=empty(); assert('T1 legalMoves=7', legalMoves(b1).length===7);
+  // T2 findRow on empty col=3
+  assert('T2 findRow=5', findRow(b1,3)===5);
+  // T3 drop & undo
+  const rA=drop(b1,3,P1); const rB=drop(b1,3,P2); assert('T3 drop rows', rA===5 && rB===4); undo(b1,3); assert('T3 undo top', b1[5][3]===P1 && findRow(b1,3)===4);
+  // T4 horizontal win P1
+  const b2=empty(); b2[5][0]=b2[5][1]=b2[5][2]=b2[5][3]=P1; const wH=getWinLine(b2,P1); assert('T4 horizontal win', !!wH && wH.length===4);
+  // T5 vertical win P2
+  const b3=empty(); b3[5][2]=b3[4][2]=b3[3][2]=b3[2][2]=P2; const wV=getWinLine(b3,P2); assert('T5 vertical win', !!wV && wV.length===4);
+  // T6 diag down-right win P1
+  const b4=empty(); b4[5][0]=b4[4][1]=b4[3][2]=b4[2][3]=P1; const wD=getWinLine(b4,P1); assert('T6 diag win', !!wD && wD.length===4);
+  // T7 evaluate center bonus (AI=P2 better at center than P1)
+  const b5=empty(); b5[5][3]=P2; const e2=evaluate(b5); const b6=empty(); b6[5][3]=P1; const e1=evaluate(b6); assert('T7 center bonus favors P2', e2>e1);
+
+  out.textContent = fails.length? `Self-tests: ${fails.length} failed → console参照` : `Self-tests: ${logs.length} passed`;
+}
+
+// Init
+buildBoard();
+reset();
+statusSmall.textContent='あなたの番';
+runSelfTests();
+</script>
+</body>
+</html>
